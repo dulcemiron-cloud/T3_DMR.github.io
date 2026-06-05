@@ -1,0 +1,446 @@
+ <!-- 26-P SEMINARIO DE TECNOLOGIAS DE LA INFORMACION II 
+  Tarea 3
+   Enjambre de Luciérnagas Digitales
+  Miron Rodriguez Dulce Maria del Rocio    -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Enjambre de Luciérnagas Digitales | Three.js</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Courier New', monospace; }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ccff99;
+            background: rgba(0,0,0,0.6);
+            padding: 12px 20px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            pointer-events: none;
+            z-index: 10;
+            font-size: 14px;
+            border-left: 4px solid #88ffaa;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+        #stats {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: #88ffaa;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .controls-note {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-family: monospace;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <strong>✨ ENJAMBRE DE LUCIÉRNAGAS DIGITALES ✨</strong><br>
+        Movimiento autónomo | Rebote en bordes | Bosque nocturno | Partículas mágicas
+    </div>
+    <div id="stats">
+        🐝 Agentes activos: <span id="agentCount">0</span>
+    </div>
+    <div class="controls-note">
+        🖱️ Mouse: girar vista | Botón derecho: pan | Rueda: zoom
+    </div>
+
+    <!-- Importamos Three.js y extras -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --------------------------------------------------------------
+        // 1. CONFIGURACIÓN DE LA ESCENA (Tarea 1: cámara, luces, entorno)
+        // --------------------------------------------------------------
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050b1a); // azul profundo noche
+        scene.fog = new THREE.FogExp2(0x050b1a, 0.012); // niebla atmosférica
+
+        // Cámara perspectiva
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(12, 6, 14);
+        camera.lookAt(0, 2, 0);
+
+        // Renderizador WebGL con sombras activadas
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap; // sombras más suaves
+        document.body.appendChild(renderer.domElement);
+
+        // Controles de órbita (para que el usuario pueda explorar)
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.zoomSpeed = 1.2;
+        controls.rotateSpeed = 0.8;
+        controls.panSpeed = 0.8;
+        controls.target.set(0, 2, 0);
+
+        // --------------------------------------------------------------
+        // ILUMINACIÓN DINÁMICA (atmósfera nocturna futurista)
+        // --------------------------------------------------------------
+        // Luz ambiental tenue
+        const ambientLight = new THREE.AmbientLight(0x22223b, 0.45);
+        scene.add(ambientLight);
+        
+        // Luz hemisferio para simular reflejo del suelo
+        const hemiLight = new THREE.HemisphereLight(0x4a6fa5, 0x2a2a3a, 0.6);
+        scene.add(hemiLight);
+        
+        // Luz direccional (como luna) con sombras
+        const moonLight = new THREE.DirectionalLight(0xaaccff, 0.9);
+        moonLight.position.set(5, 12, -3);
+        moonLight.castShadow = true;
+        moonLight.receiveShadow = false;
+        moonLight.shadow.mapSize.width = 1024;
+        moonLight.shadow.mapSize.height = 1024;
+        moonLight.shadow.camera.near = 0.5;
+        moonLight.shadow.camera.far = 25;
+        moonLight.shadow.camera.left = -8;
+        moonLight.shadow.camera.right = 8;
+        moonLight.shadow.camera.top = 8;
+        moonLight.shadow.camera.bottom = -8;
+        scene.add(moonLight);
+        
+        // Luces de colores dinámicas (pequeñas esferas flotantes que giran)
+        const colorLights = [];
+        const lightColors = [0xff44aa, 0x44ffaa, 0xaa44ff, 0xffaa44];
+        for (let i = 0; i < 6; i++) {
+            const color = lightColors[i % lightColors.length];
+            const light = new THREE.PointLight(color, 0.5, 18);
+            light.castShadow = false;
+            scene.add(light);
+            colorLights.push({ light, angle: (i / 6) * Math.PI * 2, radius: 5 + Math.random() * 4, yOffset: 1 + Math.random() * 3 });
+        }
+        
+        // Una luz puntual que sigue al mouse? No, pero podemos animar las luces de colores
+        
+        // --------------------------------------------------------------
+        // ENTORNO: BOSQUE NOCTURNO FUTURISTA (árboles con neón)
+        // --------------------------------------------------------------
+        // Suelo: un plano con textura y vegetación simple
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a2a2a, roughness: 0.8, metalness: 0.1 });
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.5;
+        ground.receiveShadow = true;
+        scene.add(ground);
+        
+        // Césped o partículas en el suelo (alfombra de brillos)
+        const grassParticles = new THREE.BufferGeometry();
+        const grassCount = 800;
+        const grassPositions = new Float32Array(grassCount * 3);
+        for (let i = 0; i < grassCount; i++) {
+            grassPositions[i*3] = (Math.random() - 0.5) * 28;
+            grassPositions[i*3+1] = -0.4 + Math.random() * 0.3;
+            grassPositions[i*3+2] = (Math.random() - 0.5) * 28;
+        }
+        grassParticles.setAttribute('position', new THREE.BufferAttribute(grassPositions, 3));
+        const grassMaterial = new THREE.PointsMaterial({ color: 0x88ffaa, size: 0.08, transparent: true, opacity: 0.6 });
+        const grassField = new THREE.Points(grassParticles, grassMaterial);
+        scene.add(grassField);
+        
+        // Árboles futuristas (cilindros con esferas luminosas)
+        function addTree(x, z, color = 0x44aa88) {
+            const group = new THREE.Group();
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B, roughness: 0.7 });
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 1.2, 6), trunkMat);
+            trunk.position.y = 0;
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            group.add(trunk);
+            
+            const foliageMat = new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: 0.2 });
+            const foliage1 = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.9, 8), foliageMat);
+            foliage1.position.y = 0.7;
+            foliage1.castShadow = true;
+            group.add(foliage1);
+            
+            const foliage2 = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.7, 8), foliageMat);
+            foliage2.position.y = 1.2;
+            foliage2.castShadow = true;
+            group.add(foliage2);
+            
+            // pequeñas luces en los árboles
+            const glowMat = new THREE.MeshStandardMaterial({ color: 0xffaa66, emissive: 0xff4422, emissiveIntensity: 0.4 });
+            const glowBall = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), glowMat);
+            glowBall.position.y = 1.6;
+            glowBall.castShadow = false;
+            group.add(glowBall);
+            
+            group.position.set(x, -0.3, z);
+            scene.add(group);
+        }
+        
+        // Generar bosque aleatorio
+        const treePositions = [
+            [-5, -4], [-4, 5], [5, -5], [6, 4], [-6, -3], [3, -6], [-3, 6], [0, -7], [7, 1], [-7, 2],
+            [2, -5.5], [-2, 5.5], [4.5, 4.5], [-4.5, -4.5]
+        ];
+        treePositions.forEach(pos => {
+            addTree(pos[0], pos[1], 0x66cc99);
+        });
+        
+        // Partículas flotantes en el ambiente (polvo mágico)
+        const particleCount = 1200;
+        const particleGeometry = new THREE.BufferGeometry();
+        const particlePositionsArray = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            particlePositionsArray[i*3] = (Math.random() - 0.5) * 35;
+            particlePositionsArray[i*3+1] = Math.random() * 8;
+            particlePositionsArray[i*3+2] = (Math.random() - 0.5) * 30;
+        }
+        particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositionsArray, 3));
+        const particleMaterial = new THREE.PointsMaterial({ color: 0x88ddff, size: 0.06, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending });
+        const ambientParticles = new THREE.Points(particleGeometry, particleMaterial);
+        scene.add(ambientParticles);
+        
+        // --------------------------------------------------------------
+        // 2. MODELO DEL AGENTE (LUCIÉRNAGA DIGITAL) - Tarea 2
+        // --------------------------------------------------------------
+        class FireflyAgent {
+            constructor(scene, startPos, startDir) {
+                this.scene = scene;
+                this.group = new THREE.Group();
+                this.position = startPos.clone();
+                this.velocity = startDir.clone().normalize();
+                this.speed = 0.08 + Math.random() * 0.05; // velocidad variable
+                
+                // Cuerpo principal (esfera luminosa)
+                const bodyMat = new THREE.MeshStandardMaterial({
+                    color: 0xffdd88,
+                    emissive: 0xffaa44,
+                    emissiveIntensity: 0.7,
+                    roughness: 0.2,
+                    metalness: 0.1
+                });
+                this.body = new THREE.Mesh(new THREE.SphereGeometry(0.28, 24, 24), bodyMat);
+                this.body.castShadow = true;
+                this.body.receiveShadow = false;
+                this.group.add(this.body);
+                
+                // Alas (dos planos translúcidos) que se animarán
+                const wingMat = new THREE.MeshStandardMaterial({
+                    color: 0xaaffdd,
+                    emissive: 0x88ffaa,
+                    transparent: true,
+                    opacity: 0.6,
+                    side: THREE.DoubleSide
+                });
+                this.leftWing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.25), wingMat);
+                this.leftWing.position.set(-0.4, 0.05, 0);
+                this.leftWing.castShadow = true;
+                this.group.add(this.leftWing);
+                
+                this.rightWing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.25), wingMat);
+                this.rightWing.position.set(0.4, 0.05, 0);
+                this.rightWing.castShadow = true;
+                this.group.add(this.rightWing);
+                
+                // Antenas (pequeños cilindros)
+                const antennaMat = new THREE.MeshStandardMaterial({ color: 0xffcc88 });
+                const leftAnt = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.25, 4), antennaMat);
+                leftAnt.position.set(-0.2, 0.32, 0.2);
+                this.group.add(leftAnt);
+                const rightAnt = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.25, 4), antennaMat);
+                rightAnt.position.set(0.2, 0.32, 0.2);
+                this.group.add(rightAnt);
+                
+                // Luz puntual dentro del cuerpo (glow)
+                this.glowLight = new THREE.PointLight(0xffaa66, 0.8, 5);
+                this.glowLight.castShadow = false;
+                this.group.add(this.glowLight);
+                
+                this.group.position.copy(this.position);
+                scene.add(this.group);
+                
+                // Variables para animación de alas
+                this.wingAngle = 0;
+                this.wingSpeed = 0.15 + Math.random() * 0.1;
+                
+                // Límites del mundo (rebote)
+                this.bounds = {
+                    x: { min: -12, max: 12 },
+                    y: { min: 0.5, max: 6.5 },
+                    z: { min: -12, max: 12 }
+                };
+            }
+            
+            // Actualizar movimiento autónomo y rebote
+            update() {
+                // Movimiento hacia adelante según velocidad local (en realidad global, pero rotamos el grupo para que mire hacia donde va)
+                this.position.x += this.velocity.x * this.speed;
+                this.position.y += this.velocity.y * this.speed;
+                this.position.z += this.velocity.z * this.speed;
+                
+                // Comprobar límites y rebotar (invertir componente correspondiente)
+                let bounced = false;
+                if (this.position.x < this.bounds.x.min) {
+                    this.position.x = this.bounds.x.min;
+                    this.velocity.x *= -1;
+                    bounced = true;
+                }
+                if (this.position.x > this.bounds.x.max) {
+                    this.position.x = this.bounds.x.max;
+                    this.velocity.x *= -1;
+                    bounced = true;
+                }
+                if (this.position.y < this.bounds.y.min) {
+                    this.position.y = this.bounds.y.min;
+                    this.velocity.y *= -1;
+                    bounced = true;
+                }
+                if (this.position.y > this.bounds.y.max) {
+                    this.position.y = this.bounds.y.max;
+                    this.velocity.y *= -1;
+                    bounced = true;
+                }
+                if (this.position.z < this.bounds.z.min) {
+                    this.position.z = this.bounds.z.min;
+                    this.velocity.z *= -1;
+                    bounced = true;
+                }
+                if (this.position.z > this.bounds.z.max) {
+                    this.position.z = this.bounds.z.max;
+                    this.velocity.z *= -1;
+                    bounced = true;
+                }
+                
+                // Si rebota, añadir pequeña aleatoriedad para que no sean trayectorias perfectas
+                if (bounced) {
+                    this.velocity.x += (Math.random() - 0.5) * 0.1;
+                    this.velocity.y += (Math.random() - 0.5) * 0.1;
+                    this.velocity.z += (Math.random() - 0.5) * 0.1;
+                    this.velocity.normalize();
+                }
+                
+                this.group.position.copy(this.position);
+                
+                // Rotar el grupo para mirar hacia la dirección de movimiento
+                if (this.velocity.length() > 0.01) {
+                    const quaternion = new THREE.Quaternion();
+                    const forward = new THREE.Vector3(0, 0, 1);
+                    const targetDir = this.velocity.clone().normalize();
+                    quaternion.setFromUnitVectors(forward, targetDir);
+                    this.group.quaternion.copy(quaternion);
+                }
+                
+                // Animación de alas (batido)
+                this.wingAngle += this.wingSpeed;
+                const flap = Math.sin(this.wingAngle) * 0.7;
+                this.leftWing.rotation.z = flap;
+                this.rightWing.rotation.z = -flap;
+                
+                // Variación de intensidad de la luz (parpadeo)
+                const intensity = 0.6 + Math.sin(Date.now() * 0.008 * this.wingSpeed) * 0.3;
+                this.glowLight.intensity = intensity;
+                // También el material emisivo
+                this.body.material.emissiveIntensity = 0.5 + Math.sin(Date.now() * 0.01) * 0.3;
+            }
+        }
+        
+        // --------------------------------------------------------------
+        // 3. CREAR MÚLTIPLES INSTANCIAS (mínimo 5)
+        // --------------------------------------------------------------
+        const agents = [];
+        const startPositions = [
+            new THREE.Vector3(2, 2, 1), new THREE.Vector3(-3, 1.5, -2), new THREE.Vector3(0, 3, -3),
+            new THREE.Vector3(4, 2.5, -1), new THREE.Vector3(-2, 1.8, 3), new THREE.Vector3(3, 2, 2),
+
+        ];
+        
+        // Direcciones iniciales aleatorias
+        for (let i = 0; i < startPositions.length; i++) {
+            const randomDir = new THREE.Vector3(
+                (Math.random() - 0.5) * 2,
+                (Math.random() - 0.5) * 1.5,
+                (Math.random() - 0.5) * 2
+            ).normalize();
+            const agent = new FireflyAgent(scene, startPositions[i], randomDir);
+            agents.push(agent);
+        }
+        
+        document.getElementById('agentCount').innerText = agents.length;
+        
+        // --------------------------------------------------------------
+        // 4. ANIMACIÓN CONTINUA (bucle principal)
+        // --------------------------------------------------------------
+        let time = 0;
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.016; // aprox delta
+            
+            // Actualizar cada agente (movimiento autónomo + rebote)
+            agents.forEach(agent => {
+                agent.update();
+            });
+            
+            // Animación de luces de colores giratorias
+            colorLights.forEach((item, idx) => {
+                item.angle += 0.008;
+                const x = Math.cos(item.angle) * item.radius;
+                const z = Math.sin(item.angle) * item.radius;
+                item.light.position.set(x, item.yOffset + Math.sin(time * 0.5 + idx) * 1.2, z);
+                // cambiar intensidad suavemente
+                item.light.intensity = 0.4 + Math.sin(time * 1.3 + idx) * 0.3;
+            });
+            
+            // Rotar partículas ambientales lentamente
+            ambientParticles.rotation.y += 0.002;
+            ambientParticles.rotation.x = Math.sin(time * 0.1) * 0.05;
+            
+            // Mover hierba (sutil)
+            grassField.rotation.y = Math.sin(time * 0.2) * 0.1;
+            
+            // Actualizar controles y render
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+        
+        // Manejo de resize de ventana
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Pequeño efecto de consola
+        console.log(`✨ Enjambre iniciado con ${agents.length} luciérnagas digitales ✨`);
+    </script>
+</body>
+</html>
